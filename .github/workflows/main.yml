@@ -57,7 +57,6 @@ jobs:
         if: steps.cache-natives.outputs.cache-hit != 'true'
         with:
           name: sources
-          path: src.zip
       - name: Extract sources
         if: steps.cache-natives.outputs.cache-hit != 'true'
         run: unzip src.zip
@@ -138,7 +137,6 @@ jobs:
         if: steps.cache-natives.outputs.cache-hit != 'true'
         with:
           name: sources
-          path: src.zip
       - name: Extract sources
         if: steps.cache-natives.outputs.cache-hit != 'true'
         run: Expand-Archive src.zip

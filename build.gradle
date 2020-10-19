@@ -1,0 +1,536 @@
+/*
+ * Copyright 2020 natanbc
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+    id 'cpp'
+    id 'c'
+}
+
+import org.apache.tools.ant.taskdefs.condition.Os
+
+def RESOURCES_LOCATION = [
+        darwin_x86_64: "darwin",
+        freebsd_x86_64: "freebsd-x86-64",
+        linux_glibc_x86: "linux-x86",
+        linux_glibc_x86_64: "linux-x86-64",
+        linux_glibc_arm: "linux-arm",
+        linux_glibc_aarch64: "linux-aarch64",
+        linux_musl_x86_64: "linux-musl-x86-64",
+        linux_musl_aarch64: "linux-musl-aarch64",
+        windows_x86: "win-x86",
+        windows_x86_64: "win-x86-64",
+]
+
+def BASE_JNI_INCLUDE_DIR = System.getProperty("java.home") + '/include'
+def OS_JNI_INCLUDE_DIR = BASE_JNI_INCLUDE_DIR + '/' + (Os.isFamily(Os.FAMILY_WINDOWS) ? 'win32' : Os.isFamily(Os.FAMILY_MAC) ? 'darwin' : 'linux')
+
+def all_platforms = [
+        "darwin_x86_64",
+        "freebsd_x86_64",
+        "linux_glibc_x86",
+        "linux_glibc_x86_64",
+        "linux_glibc_arm",
+        "linux_glibc_aarch64",
+        "linux_musl_x86_64",
+        "linux_musl_aarch64",
+        "windows_x86",
+        "windows_x86_64",
+]
+
+static def isDarwin(platform) {
+    return platform.name.startsWith("darwin_")
+}
+static def isFreebsd(platform) {
+    return platform.name.startsWith("freebsd_")
+}
+static def isLinux(platform) {
+    return platform.name.startsWith("linux_")
+}
+static def isWindows(platform) {
+    return platform.name.startsWith("windows_")
+}
+static def isX86(platform) {
+    def arch = platform.name
+    return arch.endsWith("x86") || arch.endsWith("x86_64")
+}
+static def isArm(platform) {
+    def arch = platform.name
+    return arch.endsWith("arm") || arch.endsWith("aarch64")
+}
+static def isArm32(platform) {
+    return platform.name.endsWith("arm")
+}
+
+model {
+    toolChains {
+        visualCpp(VisualCpp)
+        clang(Clang) {
+            target("darwin_x86_64") {
+                cCompiler.executable 'x86_64-apple-darwin15-clang'
+                cppCompiler.executable 'x86_64-apple-darwin15-clang++-libc++'
+                linker.executable 'x86_64-apple-darwin15-clang++-libc++'
+                linker.withArguments { args ->
+                    args.removeIf { it.startsWith("-Wl,-soname") }
+                }
+                staticLibArchiver.executable 'x86_64-apple-darwin15-ar'
+            }
+        }
+        glibc(Gcc) {
+            target("linux_glibc_arm") {
+                cCompiler.executable 'arm-linux-gnueabihf-gcc'
+                cppCompiler.executable 'arm-linux-gnueabihf-g++'
+                linker.executable 'arm-linux-gnueabihf-g++'
+                staticLibArchiver.executable 'arm-linux-gnueabihf-ar'
+            }
+            target("linux_glibc_aarch64") {
+                cCompiler.executable 'aarch64-linux-gnu-gcc'
+                cppCompiler.executable 'aarch64-linux-gnu-g++'
+                linker.executable 'aarch64-linux-gnu-g++'
+                staticLibArchiver.executable 'aarch64-linux-gnu-ar'
+            }
+        }
+        musl(Gcc) {
+            target("linux_musl_x86_64") {
+                cCompiler.executable 'x86_64-linux-musl-gcc'
+                cppCompiler.executable 'x86_64-linux-musl-g++'
+                linker.executable 'x86_64-linux-musl-g++'
+                staticLibArchiver.executable 'x86_64-linux-musl-ar'
+
+                cCompiler.withArguments { args -> args << '-static-libgcc' << '-static-libstdc++' }
+                cppCompiler.withArguments { args -> args << '-static-libgcc' << '-static-libstdc++' }
+                linker.withArguments { args -> args << '-static-libgcc' << '-static-libstdc++' }
+            }
+            target("linux_musl_aarch64") {
+                cCompiler.executable 'aarch64-linux-musl-gcc'
+                cppCompiler.executable 'aarch64-linux-musl-g++'
+                linker.executable 'aarch64-linux-musl-g++'
+                staticLibArchiver.executable 'aarch64-linux-musl-ar'
+
+                cCompiler.withArguments { args -> args << '-static-libgcc' << '-static-libstdc++' }
+                cppCompiler.withArguments { args -> args << '-static-libgcc' << '-static-libstdc++' }
+                linker.withArguments { args -> args << '-static-libgcc' << '-static-libstdc++' }
+            }
+        }
+        freebsd(Clang) {
+            target("freebsd_x86_64") {
+                def sysroot = new File(rootProject.projectDir, 'freebsd_sysroot').getAbsolutePath()
+                cCompiler.executable = 'clang'
+                cppCompiler.executable = 'clang++'
+                linker.executable = 'clang++'
+                staticLibArchiver.executable 'llvm-ar'
+
+                cCompiler.withArguments { args ->
+                    args << "--sysroot=$sysroot" << "--target=x86_64-unknown-freebsd11"
+                }
+                cppCompiler.withArguments { args ->
+                    args << "--sysroot=$sysroot" << "--target=x86_64-unknown-freebsd11"
+                }
+                linker.withArguments { args ->
+                    args << "--sysroot=$sysroot" << "--target=x86_64-unknown-freebsd11" << "-v"
+                }
+            }
+        }
+    }
+    platforms {
+        darwin_x86_64 {
+            architecture "x86_64"
+            operatingSystem "mac"
+        }
+        freebsd_x86_64 {
+            architecture "x86_64"
+            operatingSystem "freebsd"
+        }
+        linux_glibc_x86 {
+            architecture "x86"
+            operatingSystem "linux"
+        }
+        linux_glibc_x86_64 {
+            architecture "x86_64"
+            operatingSystem "linux"
+        }
+        linux_glibc_arm {
+            architecture "arm"
+            operatingSystem "linux"
+        }
+        linux_glibc_aarch64 {
+            architecture "arm64"
+            operatingSystem "linux"
+        }
+        linux_musl_x86_64 {
+            architecture "x64_64"
+            operatingSystem "linux"
+        }
+        linux_musl_aarch64 {
+            architecture "arm64"
+            operatingSystem "linux"
+        }
+        windows_x86 {
+            architecture "x86"
+            operatingSystem "windows"
+        }
+        windows_x86_64 {
+            architecture "x86_64"
+            operatingSystem "windows"
+        }
+    }
+    repositories {
+        libs(PrebuiltLibraries) {
+            jni {
+                headers.srcDirs BASE_JNI_INCLUDE_DIR, OS_JNI_INCLUDE_DIR
+            }
+        }
+    }
+    //noinspection GroovyAssignabilityCheck
+    components {
+        fdk_aac(NativeLibrarySpec) {
+            all_platforms.each { targetPlatform it }
+            sources {
+                cpp {
+                    source {
+                        srcDir "src/fdk-aac/libAACdec/src"
+                        srcDir "src/fdk-aac/libFDK/src"
+                        srcDir "src/fdk-aac/libSYS/src"
+                        srcDir "src/fdk-aac/libMpegTPDec/src"
+                        srcDir "src/fdk-aac/libArithCoding/src"
+                        srcDir "src/fdk-aac/libSBRdec/src"
+                        srcDir "src/fdk-aac/libPCMutils/src"
+                        srcDir "src/fdk-aac/libDRCdec/src"
+                        srcDir "src/fdk-aac/libSACdec/src"
+                        include "*.cpp"
+                    }
+                    exportedHeaders {
+                        srcDir "src/fdk-aac/libAACdec/include"
+                        srcDir "src/fdk-aac/libFDK/include"
+                        srcDir "src/fdk-aac/libSYS/include"
+                        srcDir "src/fdk-aac/libMpegTPDec/include"
+                        srcDir "src/fdk-aac/libArithCoding/include"
+                        srcDir "src/fdk-aac/libSBRdec/include"
+                        srcDir "src/fdk-aac/libPCMutils/include"
+                        srcDir "src/fdk-aac/libDRCdec/include"
+                        srcDir "src/fdk-aac/libSACdec/include"
+                    }
+                }
+            }
+        }
+        mpg123(NativeLibrarySpec) {
+            all_platforms.each { targetPlatform it }
+            sources {
+                c {
+                    source {
+                        srcDir "src/mpg123/src/libmpg123"
+                        srcDir "src/mpg123/src/compat"
+                        include "*.c"
+                    }
+                    exportedHeaders {
+                        srcDir "src/mpg123/src/libmpg123"
+                        srcDir "src/mpg123/src/compat"
+                        srcDir "src/mpg123/src"
+                        srcDir "fuck_autotools/mpg123"
+                    }
+                }
+            }
+            binaries.all {
+                cCompiler.define "HAVE_CONFIG_H"
+                if(isWindows(targetPlatform)) {
+                    cCompiler.define   "__FUCK_AUTOTOOLS_REAL_CONFIG_H", "config_win.h"
+                    cppCompiler.define "__FUCK_AUTOTOOLS_REAL_CONFIG_H", "config_win.h"
+                }
+            }
+        }
+        opus(NativeLibrarySpec) {
+            all_platforms.each { targetPlatform it }
+            sources {
+                c {
+                    source {
+                        srcDir "src/opus/src"
+                        srcDir "src/opus/celt"
+                        srcDir "src/opus/silk"
+                        srcDir "src/opus/silk/float"
+                        include "*.c"
+                        exclude "opus_demo.c", "repacketizer_demo.c", "opus_compare.c", "opus_custom_demo.c"
+                    }
+                    exportedHeaders {
+                        srcDir "src/opus/include"
+                        srcDir "src/opus/celt"
+                        srcDir "src/opus"
+                        srcDir "src/opus/silk"
+                        srcDir "src/opus/silk/float"
+                        srcDir "fuck_autotools/opus"
+                    }
+                }
+            }
+            binaries.all {
+                cCompiler.define "HAVE_CONFIG_H"
+                def target = isX86(targetPlatform) ? "x86" : isArm(targetPlatform) ? "arm" : null
+                if(target != null) {
+                    sources {
+                        "$target"(CSourceSet) {
+                            source {
+                                srcDir "src/opus/celt/$target"
+                                srcDir "src/opus/silk/$target"
+                                include "*.c"
+                                exclude "*_ne10.c"
+                            }
+                            exportedHeaders {
+                                srcDir "src/opus/silk/fixed"
+                            }
+                        }
+                    }
+                    sources[target].lib component.sources.c
+                }
+            }
+        }
+        samplerate(NativeLibrarySpec) {
+            all_platforms.each { targetPlatform it }
+            sources {
+                c {
+                    source {
+                        srcDir "src/libsamplerate/src"
+                        include "*.c"
+                    }
+                    exportedHeaders {
+                        srcDir "src/libsamplerate/src"
+                        srcDir "fuck_autotools/samplerate"
+                    }
+                }
+            }
+        }
+        vorbis(NativeLibrarySpec) {
+            all_platforms.each { targetPlatform it }
+            sources {
+                c {
+                    source {
+                        srcDir "src/libvorbis/lib"
+                        srcDir "src/libogg/src"
+                        include "*.c"
+                        exclude "psytune.c", "tone.c"
+                    }
+                    exportedHeaders {
+                        srcDir "src/libvorbis/include"
+                        srcDir "src/libvorbis/lib"
+                        srcDir "src/libogg/include"
+                        srcDir "fuck_autotools/vorbis"
+                    }
+                }
+            }
+        }
+        connector(NativeLibrarySpec) {
+            all_platforms.each { targetPlatform it }
+            def include_mp3 = false
+            sources {
+                connector(CSourceSet) {
+                    source {
+                        srcDir "src/connector"
+                        include "fdk-aac.c"
+                        include "opus.c"
+                        include "samplerate.c"
+                        include "vorbis.c"
+
+                        if(include_mp3) {
+                            include "mpg123.c"
+                        }
+                    }
+                }
+            }
+            binaries.all {
+                lib library: 'jni',        linkage: 'api'
+                lib library: 'fdk_aac',    linkage: 'static'
+                lib library: 'opus',       linkage: 'static'
+                lib library: 'samplerate', linkage: 'static'
+                lib library: 'vorbis',     linkage: 'static'
+
+                if(include_mp3) {
+                    lib library: 'mpg123', linkage: 'static'
+                }
+
+                def target = isLinux(targetPlatform) ? "linux"
+                        : isWindows(targetPlatform) ? "win" : null
+                if(target != null) {
+                    sources {
+                        statistics(CSourceSet) {
+                            source {
+                                srcDir "src/connector/$target"
+                                include "*.c"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        udpqueue(NativeLibrarySpec) {
+            all_platforms.each { targetPlatform it }
+            sources {
+                udpqueue(CSourceSet) {
+                    source {
+                        srcDir "src/udpqueue"
+                        include "*.c"
+                    }
+                    exportedHeaders {
+                        srcDir "src/udpqueue"
+                    }
+                }
+            }
+            binaries.all {
+                lib library: 'jni', linkage: 'api'
+                //BSD has clock_gettime/nanosleep
+                def target = isLinux(targetPlatform) || isFreebsd(targetPlatform) ? "linux"
+                        : isWindows(targetPlatform) ? "win"
+                        : isDarwin(targetPlatform) ? "darwin" : null
+                if(target != null) {
+                    sources {
+                        "$target"(CSourceSet) {
+                            source {
+                                srcDir "src/udpqueue/$target"
+                                include "*.c"
+                            }
+                        }
+                    }
+                    sources[target].lib component.sources.udpqueue
+                }
+                if(isWindows(targetPlatform)) {
+                    sources {
+                        link_winsock(CSourceSet) {
+                            source {
+                                srcDir "fuck_autotools/udpqueue"
+                                include "*.c"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    binaries {
+        all {
+            if(toolChain in VisualCpp) {
+                cppCompiler.args '/std:c++17'
+                cppCompiler.args "/Ox", "/MT"
+                cCompiler.args "/Ox", "/MT"
+            } else if(toolChain in Gcc || toolChain in Clang) {
+                cppCompiler.args '-std=c++17'
+                cppCompiler.define "NDEBUG"
+                cppCompiler.args "-O3", "-fvisibility=hidden"
+                cppCompiler.define "NDEBUG"
+                cppCompiler.args "-O3", "-fvisibility=hidden"
+                if(isDarwin(it.targetPlatform)) {
+                    linker.args "-Wl,-dead_strip"
+                } else if(isLinux(it.targetPlatform)) {
+                    linker.args "-Wl,--gc-sections", "-Wl,--exclude-libs,ALL", "-Wl,--strip-all"
+                }
+            }
+            if(toolChain in Gcc || toolChain in Clang) {
+                cCompiler.args "-fPIC"
+                cppCompiler.args "-fPIC"
+                if(isX86(it.targetPlatform)) {
+                    cCompiler.define "OPUS_X86_PRESUME_SSE4_1"
+                    cCompiler.args "-msse4.1"
+                    cppCompiler.define "OPUS_X86_PRESUME_SSE4_1"
+                    cppCompiler.args "-msse4.1"
+                } else if(isArm32(it.targetPlatform)) {
+                    cCompiler.define "OPUS_ARM_PRESUME_NEON_INTR"
+                    cCompiler.args "-mfpu=neon"
+                    cppCompiler.define "OPUS_ARM_PRESUME_NEON_INTR"
+                    cppCompiler.args "-mfpu=neon"
+                }
+            }
+
+            if(isWindows(targetPlatform)) {
+                cCompiler.define   "__FUCK_AUTOTOOLS_OPUS_REAL_CONFIG_H", "config_win.h"
+                cppCompiler.define "__FUCK_AUTOTOOLS_OPUS_REAL_CONFIG_H", "config_win.h"
+            } else {
+                cCompiler.define   "__FUCK_AUTOTOOLS_OPUS_REAL_CONFIG_H", "config_linux.h"
+                cppCompiler.define "__FUCK_AUTOTOOLS_OPUS_REAL_CONFIG_H", "config_linux.h"
+                if(isLinux(targetPlatform) || isFreebsd(targetPlatform)) {
+                    cCompiler.define   "__FUCK_AUTOTOOLS_OGG_REAL_CONFIG_TYPES_H", "ogg/config_types_linux.h"
+                    cppCompiler.define "__FUCK_AUTOTOOLS_OGG_REAL_CONFIG_TYPES_H", "ogg/config_types_linux.h"
+                }
+            }
+        }
+    }
+}
+
+task buildDarwin64 {}
+task buildFreebsd64 {}
+task buildLinuxGlibc32 {}
+task buildLinuxGlibc64 {}
+task buildLinuxGlibcArm {}
+task buildLinuxGlibcAarch64 {}
+task buildLinuxMusl64 {}
+task buildLinuxMuslAarch64 {}
+task buildWin32 {}
+task buildWin64 {}
+
+task buildDarwin {
+    dependsOn buildDarwin64
+}
+
+task buildFreebsd {
+    dependsOn buildFreebsd64
+}
+
+task buildWin {
+    dependsOn buildWin64, buildWin32
+}
+
+task buildLinux {
+    dependsOn buildLinuxGlibc64, buildLinuxGlibc32, buildLinuxGlibcArm,
+            buildLinuxGlibcAarch64, buildLinuxMusl64
+}
+
+tasks.withType(LinkSharedLibrary) {
+    if(!it.installName.get().contains("connector") && !it.installName.get().contains("udpqueue")) {
+        return
+    }
+    def filename = it.installName.get()
+    def arch = RESOURCES_LOCATION.get(it.targetPlatform.get().name)
+    if(arch.contains("darwin")) {
+        filename = filename.replace(".so", ".dylib")
+    }
+    def newPath = new File(rootProject.projectDir, "natives/" + arch + "/" + filename).getAbsoluteFile()
+    newPath.getParentFile().mkdirs()
+    it.linkedFile.set(newPath)
+    def name = it.targetPlatform.get().name
+    if(name.contains("darwin_x86_64")) {
+        buildDarwin64.dependsOn it
+    }
+    if(name.contains("freebsd_x86_64")) {
+        buildFreebsd64.dependsOn it
+    }
+    if(name.contains("linux_glibc_x86")) {
+        buildLinuxGlibc32.dependsOn it
+    }
+    if(name.contains("linux_glibc_x86_64")) {
+        buildLinuxGlibc64.dependsOn it
+    }
+    if(name.contains("linux_glibc_arm")) {
+        buildLinuxGlibcArm.dependsOn it
+    }
+    if(name.contains("linux_glibc_aarch64")) {
+        buildLinuxGlibcAarch64.dependsOn it
+    }
+    if(name.contains("linux_musl_x86_64")) {
+        buildLinuxMusl64.dependsOn it
+    }
+    if(name.contains("linux_musl_aarch64")) {
+        buildLinuxMuslAarch64.dependsOn it
+    }
+    if(name.contains("windows_x86")) {
+        buildWin32.dependsOn it
+    }
+    if(name.contains("windows_x86_64")) {
+        buildWin64.dependsOn it
+    }
+}

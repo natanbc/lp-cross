@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches: '*'
+    tags: '*'
+  pull_request:
+
+jobs:
+  download-sources:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download sources
+        run: |
+          download() {                                                   \
+            mkdir -p src/$1;                                             \
+            curl -sL $2 -o - | tar xzf - --strip-components=1 -C src/$1; \
+          }
+          download fdk-aac "https://github.com/natanbc/actions-binaries/releases/download/2/fdk-aac-2.0.0.tar.gz"
+          download libogg "https://github.com/natanbc/actions-binaries/releases/download/2/libogg-1.3.3.tar.gz"
+          download libsamplerate "https://github.com/natanbc/actions-binaries/releases/download/2/libsamplerate-0.1.9.tar.gz"
+          download libvorbis "https://github.com/natanbc/actions-binaries/releases/download/2/libvorbis-1.3.6.tar.gz"
+          download mpg123 "https://github.com/natanbc/actions-binaries/releases/download/2/mpg123-1.25.10.tar.gz"
+          download opus "https://github.com/natanbc/actions-binaries/releases/download/2/opus-1.3.tar.gz"
+          zip -r src.zip src
+      - uses: actions/upload-artifact@v2
+        with:
+          name: sources
+          path: src.zip
+  linux-mac-freebsd-natives:
+    needs: [download-sources]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Cache natives
+        uses: actions/cache@v2
+        id: cache-natives
+        with:
+          path: |
+            natives/darwin
+            natives/freebsd-x86-64
+            natives/linux-x86
+            natives/linux-x86-64
+            natives/linux-musl-x86-64
+            natives/linux-arm
+            natives/linux-aarch64
+            natives/linux-musl-aarch64
+          key: linux-mac-freebsd-${{ hashFiles('build.gradle', 'fuck_autotools/**', 'src/**') }}
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          java-version: 15
+      - uses: actions/download-artifact@v2
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          name: sources
+          path: src.zip
+      - name: Extract sources
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: unzip src.zip
+      - name: Install x86 compilers
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+          sudo apt update
+          sudo apt install libc6-dev-i386 linux-libc-dev g++-multilib
+          curl -sL https://github.com/natanbc/actions-binaries/releases/download/1/x86_64-linux-musl-cross.tgz -o - | tar xzf -
+      - name: Build x86 natives
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+          chmod +x gradlew
+          export PATH="$PATH:$(pwd)/x86_64-linux-musl-cross/bin"
+          ./gradlew buildLinuxGlibc32 buildLinuxGlibc64 buildLinuxMusl64
+      - name: Install ARM compilers
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+          # installing these two breaks i386 compilation
+          # https://bugs.launchpad.net/ubuntu/+source/gcc-defaults/+bug/1300211
+          sudo apt install g++-arm-linux-gnueabihf
+          sudo apt install g++-aarch64-linux-gnu
+          curl -sL https://github.com/natanbc/actions-binaries/releases/download/1/aarch64-linux-musl-cross.tgz -o - | tar xzf -
+      - name: Build ARM natives
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+          chmod +x gradlew
+          export PATH="$PATH:$(pwd)/aarch64-linux-musl-cross/bin"
+          ./gradlew buildLinuxGlibcArm buildLinuxGlibcAarch64 buildLinuxMuslAarch64
+      - name: Install darwin compiler
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+          curl -sL https://github.com/natanbc/actions-binaries/releases/download/1/osxcross.tar.gz -o - | tar -xzf -
+      - name: Build darwin natives
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+          chmod +x gradlew
+          export PATH="$PATH:$(pwd)/osxcross/bin"
+          export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(pwd)/osxcross/lib"
+          ./gradlew buildDarwin64
+      - name: Install freebsd compiler
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+            sudo apt install llvm
+            mkdir freebsd_sysroot
+            curl -s https://download.freebsd.org/ftp/releases/amd64/11.4-RELEASE/base.txz \
+                | tar -xJf - -C freebsd_sysroot ./lib ./usr/lib ./usr/libdata ./usr/include ./usr/share/keys ./etc
+      - name: Build freebsd natives
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+          chmod +x gradlew
+          ./gradlew buildFreebsd64
+      - uses: actions/upload-artifact@v2
+        with:
+          name: linux-mac-freebsd-natives
+          path: natives/*
+  windows-natives:
+    needs: [download-sources]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Cache natives
+        uses: actions/cache@v2
+        id: cache-natives
+        with:
+          path: |
+            natives/win-x86
+            natives/win-x86-64
+          key: win-${{ hashFiles('build.gradle', 'fuck_autotools/**', 'src/**') }}
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          java-version: 15
+      - uses: actions/download-artifact@v2
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          name: sources
+          path: src.zip
+      - name: Extract sources
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: Expand-Archive src.zip
+      - name: Build natives
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: |
+          .\gradlew.bat buildWin
+      - uses: actions/upload-artifact@v2
+        with:
+          name: windows-natives
+          path: natives/*
+  merge:
+    needs: [windows-natives, linux-mac-freebsd-natives]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: mkdir -p natives
+      - uses: actions/download-artifact@v2
+        with:
+          name: linux-mac-freebsd-natives
+          path: natives/
+      - uses: actions/download-artifact@v2
+        with:
+          name: windows-natives
+          path: natives/
+      - uses: actions/upload-artifact@v2
+        with:
+          name: natives
+          path: natives

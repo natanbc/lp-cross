@@ -139,7 +139,7 @@ jobs:
           name: sources
       - name: Extract sources
         if: steps.cache-natives.outputs.cache-hit != 'true'
-        run: Expand-Archive src.zip
+        run: Expand-Archive src.zip -DestinationPath .
       - name: Build natives
         if: steps.cache-natives.outputs.cache-hit != 'true'
         run: |

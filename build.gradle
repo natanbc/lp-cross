@@ -225,31 +225,6 @@ model {
                 }
             }
         }
-        mpg123(NativeLibrarySpec) {
-            all_platforms.each { targetPlatform it }
-            sources {
-                c {
-                    source {
-                        srcDir "src/mpg123/src/libmpg123"
-                        srcDir "src/mpg123/src/compat"
-                        include "*.c"
-                    }
-                    exportedHeaders {
-                        srcDir "src/mpg123/src/libmpg123"
-                        srcDir "src/mpg123/src/compat"
-                        srcDir "src/mpg123/src"
-                        srcDir "fuck_autotools/mpg123"
-                    }
-                }
-            }
-            binaries.all {
-                cCompiler.define "HAVE_CONFIG_H"
-                if(isWindows(targetPlatform)) {
-                    cCompiler.define   "__FUCK_AUTOTOOLS_REAL_CONFIG_H", "config_win.h"
-                    cppCompiler.define "__FUCK_AUTOTOOLS_REAL_CONFIG_H", "config_win.h"
-                }
-            }
-        }
         opus(NativeLibrarySpec) {
             all_platforms.each { targetPlatform it }
             sources {
@@ -329,7 +304,6 @@ model {
         }
         connector(NativeLibrarySpec) {
             all_platforms.each { targetPlatform it }
-            def include_mp3 = false
             sources {
                 connector(CSourceSet) {
                     source {
@@ -338,10 +312,16 @@ model {
                         include "opus.c"
                         include "samplerate.c"
                         include "vorbis.c"
-
-                        if(include_mp3) {
-                            include "mpg123.c"
-                        }
+                    }
+                }
+                mp3(CSourceSet) {
+                    source {
+                        srcDir "src/mp3"
+                        include "mp3.c"
+                    }
+                    exportedHeaders {
+                        srcDir "src/mp3/minimp3"
+                        srcDir "src/connector"
                     }
                 }
             }
@@ -351,10 +331,6 @@ model {
                 lib library: 'opus',       linkage: 'static'
                 lib library: 'samplerate', linkage: 'static'
                 lib library: 'vorbis',     linkage: 'static'
-
-                if(include_mp3) {
-                    lib library: 'mpg123', linkage: 'static'
-                }
 
                 def target = isLinux(targetPlatform) ? "linux"
                         : isWindows(targetPlatform) ? "win" : null

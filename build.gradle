@@ -74,6 +74,8 @@ static def isArm32(platform) {
     return platform.name.endsWith("arm")
 }
 
+def freebsd_sysroot = new File(rootProject.projectDir, 'freebsd_sysroot')
+
 model {
     toolChains {
         visualCpp(VisualCpp)
@@ -126,7 +128,7 @@ model {
         }
         freebsd(Clang) {
             target("freebsd_x86_64") {
-                def sysroot = new File(rootProject.projectDir, 'freebsd_sysroot').getAbsolutePath()
+                def sysroot = freebsd_sysroot.getAbsolutePath()
                 cCompiler.executable = 'clang'
                 cppCompiler.executable = 'clang++'
                 linker.executable = 'clang++'
@@ -139,7 +141,7 @@ model {
                     args << "--sysroot=$sysroot" << "--target=x86_64-unknown-freebsd11"
                 }
                 linker.withArguments { args ->
-                    args << "--sysroot=$sysroot" << "--target=x86_64-unknown-freebsd11" << "-v"
+                    args << "--sysroot=$sysroot" << "--target=x86_64-unknown-freebsd11"
                 }
             }
         }
@@ -190,6 +192,10 @@ model {
         libs(PrebuiltLibraries) {
             jni {
                 headers.srcDirs BASE_JNI_INCLUDE_DIR, OS_JNI_INCLUDE_DIR
+            }
+            freebsd_headers {
+                headers.srcDirs new File(freebsd_sysroot, "usr/include"),
+                        new File(freebsd_sysroot, "usr/include/x86")
             }
         }
     }
@@ -399,8 +405,8 @@ model {
                 cppCompiler.args '-std=c++17'
                 cppCompiler.define "NDEBUG"
                 cppCompiler.args "-O3", "-fvisibility=hidden"
-                cppCompiler.define "NDEBUG"
-                cppCompiler.args "-O3", "-fvisibility=hidden"
+                cCompiler.define "NDEBUG"
+                cCompiler.args "-O3", "-fvisibility=hidden"
                 if(isDarwin(it.targetPlatform)) {
                     linker.args "-Wl,-dead_strip"
                 } else if(isLinux(it.targetPlatform)) {
@@ -433,6 +439,15 @@ model {
                     cCompiler.define   "__FUCK_AUTOTOOLS_OGG_REAL_CONFIG_TYPES_H", "ogg/config_types_linux.h"
                     cppCompiler.define "__FUCK_AUTOTOOLS_OGG_REAL_CONFIG_TYPES_H", "ogg/config_types_linux.h"
                 }
+            }
+            if(isFreebsd(targetPlatform)) {
+                //this breaks immintrin.h so just leave host includes there,
+                //the freebsd_headers lib has higher precedence so it'll be used
+                //when present
+//                it.tasks.withType(AbstractNativeSourceCompileTask) { t ->
+//                    t.systemIncludes.setFrom()
+//                }
+                it.lib library: 'freebsd_headers', linkage: 'api'
             }
         }
     }

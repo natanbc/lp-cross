@@ -33,7 +33,7 @@ bintray {
     pkg {
         repo = 'maven'
         name = 'lp-cross'
-        licenses = ['MIT']
+        licenses = ['Apache-2.0']
         vcsUrl = 'https://github.com/natanbc/lp-cross.git'
         publish = true
         version {

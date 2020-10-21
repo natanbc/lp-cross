@@ -19,6 +19,9 @@ plugins {
     id 'c'
 }
 
+def versionObj = new Version(major: 0, minor: 1, revision: 0)
+version "${versionObj}"
+
 import org.apache.tools.ant.taskdefs.condition.Os
 
 def RESOURCES_LOCATION = [
@@ -523,5 +526,14 @@ tasks.withType(LinkSharedLibrary) {
     }
     if(name.contains("windows_x86_64")) {
         buildWin64.dependsOn it
+    }
+}
+
+class Version {
+    String major, minor, revision
+
+
+    String toString() {
+        "${major}.${minor}" + (revision == "0" ? "" : ".${revision}")
     }
 }

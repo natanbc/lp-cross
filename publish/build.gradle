@@ -1,0 +1,60 @@
+plugins {
+    id 'java-library'
+    id 'maven'
+    id 'maven-publish'
+    id 'com.jfrog.bintray' version '1.8.5'
+}
+
+archivesBaseName = 'lp-cross'
+
+task copyNatives(type: Copy) {
+    from rootProject.projectDir
+    into new File(projectDir, "src/main/resources")
+    include 'natives/**'
+}
+
+processResources.dependsOn copyNatives
+
+publishing {
+    publications {
+        BintrayRelease(MavenPublication) {
+            from components.java
+            groupId 'com.github.natanbc'
+            artifactId 'lp-cross'
+        }
+    }
+}
+
+bintray {
+    version = rootProject.version
+    user = getProjectProperty("BINTRAY_USERNAME")
+    key = getProjectProperty("BINTRAY_API_KEY")
+    publications = ["BintrayRelease"]
+    pkg {
+        repo = 'maven'
+        name = 'lp-cross'
+        licenses = ['MIT']
+        vcsUrl = 'https://github.com/natanbc/lp-cross.git'
+        publish = true
+        version {
+            name = project.version.toString()
+            released = new Date()
+        }
+    }
+}
+
+String getProjectProperty(String propertyName) {
+    String property;
+    if(hasProperty(propertyName)) {
+        property = project.properties[propertyName]
+    } else {
+        property = System.getenv(propertyName) ?: ""
+    }
+    return property
+}
+
+bintrayUpload {
+    onlyIf { !getProjectProperty("BINTRAY_USERNAME").empty }
+    onlyIf { !getProjectProperty("BINTRAY_API_KEY").empty }
+}
+

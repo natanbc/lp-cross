@@ -8,7 +8,7 @@ on:
 
 jobs:
   download-sources:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Download sources
         run: |
@@ -29,7 +29,7 @@ jobs:
           path: src.zip
   linux-mac-freebsd-natives:
     needs: [download-sources]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
         with:
@@ -115,7 +115,7 @@ jobs:
           path: natives/*
   windows-natives:
     needs: [download-sources]
-    runs-on: windows-latest
+    runs-on: windows-2019
     steps:
       - uses: actions/checkout@v2
         with:
@@ -148,9 +148,9 @@ jobs:
         with:
           name: windows-natives
           path: natives/*
-  merge:
+  merge-publish:
     needs: [windows-natives, linux-mac-freebsd-natives]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - run: mkdir -p natives
@@ -166,3 +166,25 @@ jobs:
         with:
           name: natives
           path: natives
+      - name: Set up JDK
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/setup-java@v1
+        with:
+          java-version: 15
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          chmod +x gradlew
+          export TAG="$(echo $GITHUB_REF | grep -q refs/tags && echo ${GITHUB_REF/refs\/tags\/} || echo '')"
+          ./gradlew publish:bintrayUpload
+        env:
+          BINTRAY_USERNAME: ${{ secrets.BINTRAY_USERNAME }}
+          BINTRAY_API_KEY: ${{ secrets.BINTRAY_API_KEY }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            publish/build/libs/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

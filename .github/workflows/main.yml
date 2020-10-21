@@ -27,7 +27,7 @@ jobs:
         with:
           name: sources
           path: src.zip
-  linux-mac-freebsd-natives:
+  linux-x86-natives:
     needs: [download-sources]
     runs-on: ubuntu-20.04
     steps:
@@ -39,15 +39,10 @@ jobs:
         id: cache-natives
         with:
           path: |
-            natives/darwin
-            natives/freebsd-x86-64
             natives/linux-x86
             natives/linux-x86-64
             natives/linux-musl-x86-64
-            natives/linux-arm
-            natives/linux-aarch64
-            natives/linux-musl-aarch64
-          key: linux-mac-freebsd-${{ hashFiles('build.gradle', 'fuck_autotools/**', 'src/**') }}
+          key: linux-x86-${{ hashFiles('build.gradle', 'toolchains.gradle', 'fuck_autotools/**', 'src/**') }}
       - name: Set up JDK
         uses: actions/setup-java@v1
         if: steps.cache-natives.outputs.cache-hit != 'true'
@@ -72,6 +67,38 @@ jobs:
           chmod +x gradlew
           export PATH="$PATH:$(pwd)/x86_64-linux-musl-cross/bin"
           ./gradlew buildLinuxGlibc32 buildLinuxGlibc64 buildLinuxMusl64
+      - uses: actions/upload-artifact@v2
+        with:
+          name: linux-x86-natives
+          path: natives/*
+  linux-arm-natives:
+    needs: [download-sources]
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Cache natives
+        uses: actions/cache@v2
+        id: cache-natives
+        with:
+          path: |
+            natives/linux-arm
+            natives/linux-aarch64
+            natives/linux-musl-aarch64
+          key: linux-arm-${{ hashFiles('build.gradle', 'toolchains.gradle', 'fuck_autotools/**', 'src/**') }}
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          java-version: 15
+      - uses: actions/download-artifact@v2
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          name: sources
+      - name: Extract sources
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: unzip src.zip
       - name: Install ARM compilers
         if: steps.cache-natives.outputs.cache-hit != 'true'
         run: |
@@ -86,6 +113,36 @@ jobs:
           chmod +x gradlew
           export PATH="$PATH:$(pwd)/aarch64-linux-musl-cross/bin"
           ./gradlew buildLinuxGlibcArm buildLinuxGlibcAarch64 buildLinuxMuslAarch64
+      - uses: actions/upload-artifact@v2
+        with:
+          name: linux-arm-natives
+          path: natives/*
+  mac-natives:
+    needs: [download-sources]
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Cache natives
+        uses: actions/cache@v2
+        id: cache-natives
+        with:
+          path: |
+            natives/darwin
+          key: mac-${{ hashFiles('build.gradle', 'toolchains.gradle', 'fuck_autotools/**', 'src/**') }}
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          java-version: 15
+      - uses: actions/download-artifact@v2
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          name: sources
+      - name: Extract sources
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: unzip src.zip
       - name: Install darwin compiler
         if: steps.cache-natives.outputs.cache-hit != 'true'
         run: |
@@ -100,6 +157,36 @@ jobs:
           export PATH="$PATH:$(pwd)/osxcross/bin"
           export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(pwd)/osxcross/lib"
           ./gradlew buildDarwin64
+      - uses: actions/upload-artifact@v2
+        with:
+          name: mac-natives
+          path: natives/*
+  freebsd-natives:
+    needs: [download-sources]
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Cache natives
+        uses: actions/cache@v2
+        id: cache-natives
+        with:
+          path: |
+            natives/freebsd-x86-64
+          key: freebsd-${{ hashFiles('build.gradle', 'toolchains.gradle', 'fuck_autotools/**', 'src/**') }}
+      - name: Set up JDK
+        uses: actions/setup-java@v1
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          java-version: 15
+      - uses: actions/download-artifact@v2
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        with:
+          name: sources
+      - name: Extract sources
+        if: steps.cache-natives.outputs.cache-hit != 'true'
+        run: unzip src.zip
       - name: Install freebsd compiler
         if: steps.cache-natives.outputs.cache-hit != 'true'
         run: |
@@ -114,7 +201,7 @@ jobs:
           ./gradlew buildFreebsd64
       - uses: actions/upload-artifact@v2
         with:
-          name: linux-mac-freebsd-natives
+          name: freebsd-natives
           path: natives/*
   windows-natives:
     needs: [download-sources]
@@ -130,7 +217,7 @@ jobs:
           path: |
             natives/win-x86
             natives/win-x86-64
-          key: win-${{ hashFiles('build.gradle', 'fuck_autotools/**', 'src/**') }}
+          key: win-${{ hashFiles('build.gradle', 'toolchains.gradle', 'fuck_autotools/**', 'src/**') }}
       - name: Set up JDK
         uses: actions/setup-java@v1
         if: steps.cache-natives.outputs.cache-hit != 'true'
@@ -152,14 +239,26 @@ jobs:
           name: windows-natives
           path: natives/*
   merge-publish:
-    needs: [windows-natives, linux-mac-freebsd-natives]
+    needs: [linux-x86-natives, linux-arm-natives, mac-natives, freebsd-natives, windows-natives]
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - run: mkdir -p natives
       - uses: actions/download-artifact@v2
         with:
-          name: linux-mac-freebsd-natives
+          name: linux-x86-natives
+          path: natives/
+      - uses: actions/download-artifact@v2
+        with:
+          name: linux-arm-natives
+          path: natives/
+      - uses: actions/download-artifact@v2
+        with:
+          name: mac-natives
+          path: natives/
+      - uses: actions/download-artifact@v2
+        with:
+          name: freebsd-natives
           path: natives/
       - uses: actions/download-artifact@v2
         with:

@@ -188,6 +188,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            publish/build/libs/*.jar
+            publish/build/libs/*[!sources].jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

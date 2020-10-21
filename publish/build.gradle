@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.bundling.Jar
+
 plugins {
     id 'java-library'
     id 'maven'
@@ -15,12 +17,19 @@ task copyNatives(type: Copy) {
 
 processResources.dependsOn copyNatives
 
+task sourceJar(type: Jar) {
+    classifier "sources"
+    from sourceSets.main.allJava
+}
+
 publishing {
     publications {
         BintrayRelease(MavenPublication) {
             from components.java
             groupId 'com.github.natanbc'
             artifactId 'lp-cross'
+
+            artifact sourceJar
         }
     }
 }
